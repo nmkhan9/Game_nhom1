@@ -27,6 +27,60 @@ current_player = 1
 
 # Khởi tạo Pygame
 pygame.init()
+# Thêm vào đầu file, sau pygame.init()
+clock = pygame.time.Clock()
+
+# Sửa vòng lặp chính
+def main_loop():
+    global current_player, player1_time, player2_time, last_turn_time
+    last_turn_time = pygame.time.get_ticks()
+    needs_redraw = True  # Chỉ vẽ lại khi cần
+
+    while True:
+        if needs_redraw:
+            return_menu_rect = draw_grid()
+            needs_redraw = False
+        check_game_over()
+
+        current_turn_ms = pygame.time.get_ticks() - last_turn_time
+        current_turn_sec = current_turn_ms // 1000
+
+        if current_player == 1:
+            player1_time = max(0, 30 - current_turn_sec)
+            if player1_time <= 0:
+                current_player = 2
+                last_turn_time = pygame.time.get_ticks()
+                needs_redraw = True
+        else:
+            player2_time = max(0, 30 - current_turn_sec)
+            if player2_time <= 0:
+                current_player = 1
+                last_turn_time = pygame.time.get_ticks()
+                needs_redraw = True
+
+        if not is_pvp and current_player == 2:
+            ai_move()
+            needs_redraw = True
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if return_menu_rect.collidepoint(event.pos):
+                    reset_game()
+                    needs_redraw = True
+                else:
+                    check_click(event.pos)
+                    needs_redraw = True
+            elif event.type == pygame.VIDEORESIZE:
+                global WIDTH, HEIGHT
+                WIDTH, HEIGHT = event.w, event.h - MARGIN
+                display = pygame.display.set_mode((WIDTH, HEIGHT + MARGIN), pygame.RESIZABLE)
+                needs_redraw = True
+
+        clock.tick(60)  # Giới hạn 60 FPS
+
 display = pygame.display.set_mode((WIDTH, HEIGHT + MARGIN), pygame.RESIZABLE)
 pygame.display.set_caption("Dots and Boxes")
 
@@ -61,11 +115,11 @@ class Board:
         self.v_lines = [row[:] for row in v_lines]
         self.boxes = [row[:] for row in boxes]
         self.total_half_edges = 2 * (grid_size * (grid_size - 1) + (grid_size - 1) * grid_size)
-        self.edges = {}  # Lưu trạng thái cạnh: (type, row, col) -> player
+        self.edges = {}
+        self.state_cache = {}  # Bộ nhớ đệm trạng thái
         self.init_edges()
 
     def init_edges(self):
-        # Khởi tạo các cạnh từ horizontal_lines và vertical_lines
         for row in range(self.grid_size):
             for col in range(self.grid_size - 1):
                 if self.h_lines[row][col]:
@@ -82,17 +136,17 @@ class Board:
         moves = []
         for row in range(self.grid_size):
             for col in range(self.grid_size - 1):
-                if not ("h", row, col) in self.edges:
+                if ("h", row, col) not in self.edges:
                     moves.append(("h", row, col))
         for row in range(self.grid_size - 1):
             for col in range(self.grid_size):
-                if not ("v", row, col) in self.edges:
+                if ("v", row, col) not in self.edges:
                     moves.append(("v", row, col))
         return moves
 
     def make_move(self, move, player):
         move_type, row, col = move
-        self.edges[move, row, col] = player
+        self.edges[(move_type, row, col)] = player
         if move_type == "h":
             self.h_lines[row][col] = player
         else:
@@ -111,7 +165,6 @@ class Board:
         return completed
 
     def evaluate(self):
-        # Hàm đánh giá: số ô của AI - số ô của người chơi
         player1_score = sum(row.count(1) for row in self.boxes)
         player2_score = sum(row.count(2) for row in self.boxes)
         return player2_score - player1_score
@@ -119,21 +172,113 @@ class Board:
     def is_game_over(self):
         return all(all(cell > 0 for cell in row) for row in self.boxes)
 
+    def count_box_edges(self, row, col):
+        sides_filled = sum([
+            1 if ("h", row, col) in self.edges else 0,
+            1 if ("h", row + 1, col) in self.edges else 0,
+            1 if ("v", row, col) in self.edges else 0,
+            1 if ("v", row, col + 1) in self.edges else 0
+        ])
+        return sides_filled
+
+    def find_chains_and_loops(self):
+        # Tối ưu: Chỉ tìm chuỗi/vòng ngắn (dưới 5 ô) để giảm thời gian
+        chains = []
+        loops = []
+        visited = [[False] * (self.grid_size - 1) for _ in range(self.grid_size - 1)]
+
+        def dfs(row, col, path, start_row, start_col, depth=0):
+            if depth > 5:  # Giới hạn độ dài chuỗi/vòng
+                return
+            if visited[row][col]:
+                if (row, col) == (start_row, start_col) and len(path) >= 4:
+                    loops.append(path[:])
+                return
+            visited[row][col] = True
+            path.append((row, col))
+
+            neighbors = []
+            if row > 0 and self.count_box_edges(row - 1, col) >= 2:
+                neighbors.append((row - 1, col))
+            if row < self.grid_size - 2 and self.count_box_edges(row + 1, col) >= 2:
+                neighbors.append((row + 1, col))
+            if col > 0 and self.count_box_edges(row, col - 1) >= 2:
+                neighbors.append((row, col - 1))
+            if col < self.grid_size - 2 and self.count_box_edges(row, col + 1) >= 2:
+                neighbors.append((row, col + 1))
+
+            for nr, nc in neighbors:
+                dfs(nr, nc, path, start_row, start_col, depth + 1)
+
+            if not neighbors and len(path) >= 2:
+                chains.append(path[:])
+
+            path.pop()
+            visited[row][col] = False
+
+        for row in range(self.grid_size - 1):
+            for col in range(self.grid_size - 1):
+                if self.count_box_edges(row, col) >= 2 and not visited[row][col]:
+                    dfs(row, col, [], row, col)
+        return chains, loops
+
+    def get_game_state(self):
+        # Dùng bộ nhớ đệm để tránh tính toán lại
+        state_key = str(self.h_lines) + str(self.v_lines) + str(self.boxes)
+        if state_key in self.state_cache:
+            return self.state_cache[state_key]
+
+        chains, loops = self.find_chains_and_loops()
+        one_edge_boxes = []
+        for row in range(self.grid_size - 1):
+            for col in range(self.grid_size - 1):
+                if self.count_box_edges(row, col) == 3:
+                    one_edge_boxes.append((row, col))
+
+        if not one_edge_boxes:
+            state = ("no_one_edge", None)
+        elif any(len(chain) == 3 for chain in chains):
+            state = ("chain_3", one_edge_boxes)
+        elif any(len(loop) == 4 for loop in loops):
+            state = ("loop_4", one_edge_boxes)
+        else:
+            state = ("other", one_edge_boxes)
+
+        self.state_cache[state_key] = state
+        return state
+
 # Hàm minimax với cắt tỉa alpha-beta
-def minimax(board, depth, alpha, beta, maximizing_player, max_depth=4):
+def minimax(board, depth, alpha, beta, maximizing_player, max_depth=2):  # Giảm max_depth
     if depth == max_depth or board.is_game_over():
-        return board.evaluate(), None
+        score = board.evaluate()
+        state, _ = board.get_game_state()
+        if state == "chain_3" or state == "loop_4":
+            if maximizing_player:
+                score += 2  # Giảm trọng số để nhanh hơn
+            else:
+                score -= 2
+        return score, None
 
     moves = board.get_available_moves()
     if not moves:
         return board.evaluate(), None
+
+    # Sắp xếp nước đi để cắt tỉa hiệu quả hơn
+    prioritized_moves = []
+    for move in moves:
+        new_board = board.copy()
+        completed = new_board.make_move(move, 2 if maximizing_player else 1)
+        score = 10 if completed else 0  # Ưu tiên hoàn thành ô
+        prioritized_moves.append((score, move))
+    prioritized_moves.sort(reverse=True)
+    moves = [move for _, move in prioritized_moves]
 
     if maximizing_player:
         max_eval = float('-inf')
         best_move = None
         for move in moves:
             new_board = board.copy()
-            completed = new_board.make_move(move, 2)  # AI là player 2
+            completed = new_board.make_move(move, 2)
             if completed:
                 eval_score, _ = minimax(new_board, depth, alpha, beta, True, max_depth)
             else:
@@ -150,7 +295,7 @@ def minimax(board, depth, alpha, beta, maximizing_player, max_depth=4):
         best_move = None
         for move in moves:
             new_board = board.copy()
-            completed = new_board.make_move(move, 1)  # Người chơi là player 1
+            completed = new_board.make_move(move, 1)
             if completed:
                 eval_score, _ = minimax(new_board, depth, alpha, beta, False, max_depth)
             else:
@@ -172,36 +317,80 @@ def ai_move():
         player2_time = max(0, player2_time - current_turn_sec)
 
     board = Board(GRID_SIZE, horizontal_lines, vertical_lines, boxes)
+    state, one_edge_boxes = board.get_game_state()
+    chains, loops = board.find_chains_and_loops()
 
-    # Ưu tiên nước đi hoàn thành ô
+    # Heuristic 1: Hoàn thành ô
     almost_completed = []
     for row in range(GRID_SIZE - 1):
         for col in range(GRID_SIZE - 1):
-            sides_filled = sum([
-                1 if ("h", row, col) in board.edges else 0,
-                1 if ("h", row + 1, col) in board.edges else 0,
-                1 if ("v", row, col) in board.edges else 0,
-                1 if ("v", row, col + 1) in board.edges else 0
-            ])
-            if sides_filled == 3:
-                if not ("h", row, col) in board.edges:
+            if board.count_box_edges(row, col) == 3:
+                if ("h", row, col) not in board.edges:
                     almost_completed.append(("h", row, col))
-                elif not ("h", row + 1, col) in board.edges:
+                elif ("h", row + 1, col) not in board.edges:
                     almost_completed.append(("h", row + 1, col))
-                elif not ("v", row, col) in board.edges:
+                elif ("v", row, col) not in board.edges:
                     almost_completed.append(("v", row, col))
-                elif not ("v", row, col + 1) in board.edges:
+                elif ("v", row, col + 1) not in board.edges:
                     almost_completed.append(("v", row, col + 1))
 
     if almost_completed:
         move = random.choice(almost_completed)
     else:
-        # Sử dụng minimax để tìm nước đi tốt nhất
-        _, move = minimax(board, 0, float('-inf'), float('inf'), True)
-        if not move:
-            # Nếu không tìm được nước đi, chọn ngẫu nhiên
-            available_moves = board.get_available_moves()
-            move = random.choice(available_moves) if available_moves else None
+        # Heuristic 2: Phá chuỗi dài hoặc vòng lớn
+        for chain in chains:
+            if len(chain) >= 4:
+                row, col = chain[0]
+                if board.count_box_edges(row, col) == 3:
+                    if ("h", row, col) not in board.edges:
+                        move = ("h", row, col)
+                    elif ("h", row + 1, col) not in board.edges:
+                        move = ("h", row + 1, col)
+                    elif ("v", row, col) not in board.edges:
+                        move = ("v", row, col)
+                    elif ("v", row, col + 1) not in board.edges:
+                        move = ("v", row, col + 1)
+                    break
+        else:
+            for loop in loops:
+                if len(loop) > 4:
+                    row, col = loop[0]
+                    if board.count_box_edges(row, col) == 3:
+                        if ("h", row, col) not in board.edges:
+                            move = ("h", row, col)
+                        elif ("h", row + 1, col) not in board.edges:
+                            move = ("h", row + 1, col)
+                        elif ("v", row, col) not in board.edges:
+                            move = ("v", row, col)
+                        elif ("v", row, col + 1) not in board.edges:
+                            move = ("v", row, col + 1)
+                        break
+            else:
+                # Heuristic 3: Nếu lưới lớn, chọn nước đi ngẫu nhiên an toàn
+                if GRID_SIZE > 6:
+                    safe_moves = []
+                    for move in board.get_available_moves():
+                        new_board = board.copy()
+                        new_board.make_move(move, 2)
+                        # Kiểm tra tất cả ô để đảm bảo không tạo ô valence 3
+                        valence_3_created = False
+                        for r in range(GRID_SIZE - 1):
+                            for c in range(GRID_SIZE - 1):
+                                if new_board.count_box_edges(r, c) == 3:
+                                    valence_3_created = True
+                                    break
+                            if valence_3_created:
+                                break
+                        if not valence_3_created:
+                            safe_moves.append(move)
+                    move = random.choice(safe_moves) if safe_moves else None
+                else:
+                    # Dùng minimax cho lưới nhỏ
+                    _, move = minimax(board, 0, float('-inf'), float('inf'), True)
+
+    if not move:
+        available_moves = board.get_available_moves()
+        move = random.choice(available_moves) if available_moves else None
 
     if move:
         move_type, row, col = move
