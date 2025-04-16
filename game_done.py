@@ -419,6 +419,7 @@ def show_how_to_play_screen():
         draw_gradient(display, LIGHT_BLUE, WHITE, (0, 0, WIDTH, HEIGHT + MARGIN))
         title = title_font.render("How to Play Dots and Boxes", True, BLACK)
         instructions = [
+            "This game was developed by Group 1 of class TUD63_UTC.",
             "1. Two players take turns drawing a line connecting",
             "   two adjacent dots (horizontal or vertical).",
             "2. If a player completes the fourth side of a 1x1 box,",
@@ -476,28 +477,50 @@ def options_menu():
     input_active = None
     player1_input = player1_name
     player2_input = player2_name
+    cursor_visible = True
+    cursor_timer = pygame.time.get_ticks()
 
     while True:
         mouse_pos = pygame.mouse.get_pos()
         draw_gradient(display, LIGHT_BLUE, WHITE, (0, 0, WIDTH, HEIGHT + MARGIN))
         title = title_font.render("Game Options", True, BLACK)
 
+        # Cập nhật trạng thái nhấp nháy con trỏ
+        if pygame.time.get_ticks() - cursor_timer > 500:  # Nhấp nháy mỗi 500ms
+            cursor_visible = not cursor_visible
+            cursor_timer = pygame.time.get_ticks()
+
+        # Nhãn và ô nhập tên người chơi 1
         player1_label = label_font.render("Player 1 Name:", True, BLACK)
         player1_rect = pygame.Rect(WIDTH // 2 - 250, HEIGHT // 2 - 200, 500, 50)
-        player1_display = player1_input if player1_input.strip() != "" else "Player 1"
-        player1_input_surface = button_font.render(player1_display, True, BLACK)
+        player1_display = player1_input if player1_input.strip() != "" else "Enter Player 1 Name"
+        player1_input_surface = button_font.render(player1_display, True, GRAY if player1_input.strip() == "" else BLACK)
+        player1_bg_color = (220, 220, 220) if input_active == 'player1' else WHITE
         player1_border_color = BLACK if input_active == 'player1' else DARK_GRAY
-        pygame.draw.rect(display, WHITE, player1_rect, border_radius=10)
+        pygame.draw.rect(display, player1_bg_color, player1_rect, border_radius=10)
         pygame.draw.rect(display, player1_border_color, player1_rect, 3, border_radius=10)
+        display.blit(player1_input_surface, (WIDTH // 2 - 240, HEIGHT // 2 - 190))
+        # Vẽ con trỏ nhấp nháy
+        if input_active == 'player1' and cursor_visible and player1_input.strip() != "":
+            cursor_x = WIDTH // 2 - 240 + player1_input_surface.get_width()
+            pygame.draw.line(display, BLACK, (cursor_x, HEIGHT // 2 - 190), (cursor_x, HEIGHT // 2 - 170), 2)
 
+        # Nhãn và ô nhập tên người chơi 2
         player2_label = label_font.render("Player 2/AI Name:", True, BLACK)
         player2_rect = pygame.Rect(WIDTH // 2 - 250, HEIGHT // 2 - 120, 500, 50)
-        player2_display = player2_input if player2_input.strip() != "" else ("Player 2" if is_pvp else "AI")
-        player2_input_surface = button_font.render(player2_display, True, BLACK)
+        player2_display = player2_input if player2_input.strip() != "" else ("Enter Player 2 Name" if is_pvp else "Enter AI Name")
+        player2_input_surface = button_font.render(player2_display, True, GRAY if player2_input.strip() == "" else BLACK)
+        player2_bg_color = (220, 220, 220) if input_active == 'player2' else WHITE
         player2_border_color = BLACK if input_active == 'player2' else DARK_GRAY
-        pygame.draw.rect(display, WHITE, player2_rect, border_radius=10)
+        pygame.draw.rect(display, player2_bg_color, player2_rect, border_radius=10)
         pygame.draw.rect(display, player2_border_color, player2_rect, 3, border_radius=10)
+        display.blit(player2_input_surface, (WIDTH // 2 - 240, HEIGHT // 2 - 110))
+        # Vẽ con trỏ nhấp nháy
+        if input_active == 'player2' and cursor_visible and player2_input.strip() != "":
+            cursor_x = WIDTH // 2 - 240 + player2_input_surface.get_width()
+            pygame.draw.line(display, BLACK, (cursor_x, HEIGHT // 2 - 110), (cursor_x, HEIGHT // 2 - 90), 2)
 
+        # Chọn người chơi đầu tiên
         first_player_label = label_font.render("First Move:", True, BLACK)
         player1_move_rect = pygame.Rect(WIDTH // 2 - 250, HEIGHT // 2 - 40, 240, 60)
         player2_move_rect = pygame.Rect(WIDTH // 2 + 10, HEIGHT // 2 - 40, 240, 60)
@@ -516,6 +539,7 @@ def options_menu():
         player1_move_text = button_font.render(player1_input if player1_input.strip() != "" else "Player 1", True, BLACK)
         player2_move_text = button_font.render(player2_input if player2_input.strip() != "" else ("Player 2" if is_pvp else "AI"), True, BLACK)
 
+        # Điều chỉnh kích thước lưới
         grid_size_label = label_font.render("Grid Size:", True, BLACK)
         decrease_grid_rect = pygame.Rect(WIDTH // 2 - 250, HEIGHT // 2 + 50, 60, 60)
         grid_display_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 50, 240, 60)
@@ -534,6 +558,7 @@ def options_menu():
         grid_size_text = button_font.render(str(GRID_SIZE), True, BLACK)
         increase_text = button_font.render("+", True, BLACK)
 
+        # Nút quay lại
         back_rect = pygame.Rect(WIDTH // 2 - 250, HEIGHT // 2 + 140, 240, 60)
         back_color = PASTEL_GREEN if not back_rect.collidepoint(mouse_pos) else HOVER_COLOR
         pygame.draw.rect(display, DARK_GRAY, (back_rect.x + 3, back_rect.y + 3, 240, 60), border_radius=10)
@@ -541,6 +566,7 @@ def options_menu():
         pygame.draw.rect(display, BLACK, back_rect, 2, border_radius=10)
         back_text = button_font.render("Back", True, BLACK)
 
+        # Nút chơi game
         play_game_rect = pygame.Rect(WIDTH // 2 + 10, HEIGHT // 2 + 140, 240, 60)
         play_game_color = DARK_GREEN if not play_game_rect.collidepoint(mouse_pos) else HOVER_COLOR
         pygame.draw.rect(display, DARK_GRAY, (play_game_rect.x + 3, play_game_rect.y + 3, 240, 60), border_radius=10)
@@ -548,11 +574,10 @@ def options_menu():
         pygame.draw.rect(display, BLACK, play_game_rect, 2, border_radius=10)
         play_game_text = button_font.render("Play Game", True, WHITE)
 
+        # Hiển thị các thành phần giao diện
         display.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 4 - 150))
         display.blit(player1_label, (WIDTH // 2 - 250, HEIGHT // 2 - 240))
-        display.blit(player1_input_surface, (WIDTH // 2 - 240, HEIGHT // 2 - 190))
         display.blit(player2_label, (WIDTH // 2 - 250, HEIGHT // 2 - 145))
-        display.blit(player2_input_surface, (WIDTH // 2 - 240, HEIGHT // 2 - 110))
         display.blit(first_player_label, (WIDTH // 2 - 250, HEIGHT // 2 - 70))
         display.blit(player1_move_text, (WIDTH // 2 - 240 + (240 - player1_move_text.get_width()) // 2, HEIGHT // 2 - 25))
         display.blit(player2_move_text, (WIDTH // 2 + 20 + (240 - player2_move_text.get_width()) // 2, HEIGHT // 2 - 25))
@@ -571,9 +596,17 @@ def options_menu():
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if player1_rect.collidepoint(event.pos):
+                    if input_active == 'player1':  # Nhấp lại để xóa
+                        player1_input = ""
                     input_active = 'player1'
+                    cursor_visible = True
+                    cursor_timer = pygame.time.get_ticks()
                 elif player2_rect.collidepoint(event.pos):
+                    if input_active == 'player2':  # Nhấp lại để xóa
+                        player2_input = ""
                     input_active = 'player2'
+                    cursor_visible = True
+                    cursor_timer = pygame.time.get_ticks()
                 elif player1_move_rect.collidepoint(event.pos):
                     first_player = 1
                 elif player2_move_rect.collidepoint(event.pos):
@@ -607,7 +640,7 @@ def options_menu():
                         player1_input = player1_input[:-1]
                     elif input_active == 'player2':
                         player2_input = player2_input[:-1]
-                elif event.unicode.isprintable() and len(player1_input if input_active == 'player1' else player2_input) < 15:
+                elif event.unicode.isalnum() and len(player1_input if input_active == 'player1' else player2_input) < 15:
                     if input_active == 'player1':
                         player1_input += event.unicode
                     elif input_active == 'player2':
@@ -879,13 +912,13 @@ def check_game_over():
         display.blit(replay_text, (replay_btn.x + 90 - replay_text.get_width() // 2,
                                    replay_btn.y + 25 - replay_text.get_height() // 2))
 
-        # Nút về menu
-        menu_btn = pygame.Rect(WIDTH // 2 + 20, HEIGHT // 2 + 70, 180, 50)
-        pygame.draw.rect(display, LIGHT_BLUE, menu_btn, border_radius=10)
-        pygame.draw.rect(display, BLACK, menu_btn, 2, border_radius=10)
-        menu_text = button_font.render("Main Menu", True, BLACK)
-        display.blit(menu_text, (menu_btn.x + 90 - menu_text.get_width() // 2,
-                                 menu_btn.y + 25 - menu_text.get_height() // 2))
+        # Nút thoát (thay cho nút Main Menu)
+        quit_btn = pygame.Rect(WIDTH // 2 + 20, HEIGHT // 2 + 70, 180, 50)
+        pygame.draw.rect(display, LIGHT_BLUE, quit_btn, border_radius=10)
+        pygame.draw.rect(display, BLACK, quit_btn, 2, border_radius=10)
+        quit_text = button_font.render("Quit", True, BLACK)
+        display.blit(quit_text, (quit_btn.x + 90 - quit_text.get_width() // 2,
+                                 quit_btn.y + 25 - quit_text.get_height() // 2))
 
         pygame.display.update()
 
@@ -901,10 +934,9 @@ def check_game_over():
                         reset_game()
                         waiting = False
                         return
-                    elif menu_btn.collidepoint(event.pos):
-                        menu()
-                        waiting = False
-                        return
+                    elif quit_btn.collidepoint(event.pos):
+                        pygame.quit()
+                        sys.exit()
 
 def reset_game():
     global horizontal_lines, vertical_lines, boxes, current_player, start_time, player1_time, player2_time, last_turn_time
