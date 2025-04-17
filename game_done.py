@@ -413,33 +413,52 @@ def draw_gradient(surface, color1, color2, rect):
         b = int(color1.b + (color2.b - color1.b) * ratio)
         pygame.draw.line(surface, (r, g, b), (x, y + i), (x + w, y + i))
 
+
 def show_how_to_play_screen():
     running = True
+    instructions = [
+        "Dots and Boxes - Developed by Team 1, TUD63_UTC",
+"",
+"Rules:",
+"1. Players take turns drawing a horizontal or vertical line",
+" between two adjacent dots on the grid.",
+"2. Completing the fourth side of a 1x1 square will earn one",
+" point and an extra turn. The squares are marked by color:",
+" Red (Player 1) or Blue (Player 2/AI).",
+"3. Each turn has a time limit of 30 seconds. If the time runs out",
+" the game ends and the player loses.",
+"4. The game ends when all squares are completed or a",
+" the player's time expires.",
+"5. The player with the most squares wins. There will be a draw",
+" if the score is equal.",
+"",
+"Click anywhere to return to the main menu..."
+    ]
+
     while running:
+        # Vẽ nền gradient
         draw_gradient(display, LIGHT_BLUE, WHITE, (0, 0, WIDTH, HEIGHT + MARGIN))
+
+        # Tiêu đề
         title = title_font.render("How to Play Dots and Boxes", True, BLACK)
-        instructions = [
-            "This game was developed by Group 1 of class TUD63_UTC.",
-            "1. Two players take turns drawing a line connecting",
-            "   two adjacent dots (horizontal or vertical).",
-            "2. If a player completes the fourth side of a 1x1 box,",
-            "   they score a point and take another turn.",
-            "3. The game ends when all boxes are completed.",
-            "4. The player with the higher score wins!",
-            "",
-            "Click anywhere to return to the main menu..."
-        ]
-        display.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
+        title_rect = title.get_rect(center=(WIDTH // 2, 80))
+        display.blit(title, title_rect)
+
+        # Hiển thị luật chơi
         for i, line in enumerate(instructions):
             line_surface = label_font.render(line, True, BLACK)
-            display.blit(line_surface, (WIDTH // 2 - line_surface.get_width() // 2, 150 + i * 45))
+            line_rect = line_surface.get_rect(center=(WIDTH // 2, 160 + i * 40))
+            display.blit(line_surface, line_rect)
+
         pygame.display.update()
+
+        # Xử lý sự kiện
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                running = False
+                running = False  # Quay lại menu chính
 
 def draw_menu():
     mouse_pos = pygame.mouse.get_pos()
